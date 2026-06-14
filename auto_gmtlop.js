@@ -1,97 +1,63 @@
 (function () {
     'use strict';
 
-    if (window.__auto_gmtlop_loaded) return;
-    window.__auto_gmtlop_loaded = true;
+    if (window.__gmtlop_click_hook) return;
+    window.__gmtlop_click_hook = true;
 
-    function log(...args) {
-        console.log('[AUTO GMTLOP]', ...args);
-    }
+    console.log('[GMTLOP] click hook loaded');
 
-    function selectGMTLOP(player) {
-        try {
-            if (!player || !player.sources) return false;
+    // 1. Перехоплюємо клік по "Дивитись"
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('button, div, a');
 
-            const sources = player.sources || [];
+        if (!btn) return;
 
-            log('Sources:', sources);
+        const text = (btn.innerText || btn.textContent || '').trim().toLowerCase();
 
-            // шукаємо GMTLOP
-            const gmtlopIndex = sources.findIndex(s =>
-                (s.title || s.name || '').toLowerCase().includes('gmtlop')
-            );
+        // ловимо кнопку "дивитись"
+        if (text === 'дивитись' || text.includes('дивитись')) {
 
-            if (gmtlopIndex === -1) {
-                log('GMTLOP not found');
-                return false;
-            }
+            console.log('[GMTLOP] Watch clicked');
 
-            log('GMTLOP found at index:', gmtlopIndex);
-
-            // пробуємо вибрати джерело
-            if (typeof player.play_source === 'function') {
-                player.play_source(gmtlopIndex);
-                return true;
-            }
-
-            if (typeof player.set_source === 'function') {
-                player.set_source(gmtlopIndex);
-                return true;
-            }
-
-            // fallback через активний індекс
-            player.source = gmtlopIndex;
-
-            return true;
-
-        } catch (e) {
-            console.error('[AUTO GMTLOP] error:', e);
+            // даємо Lampa відкрити sources
+            setTimeout(waitForSourcesAndClickGMTLOP, 600);
         }
-    }
+    }, true);
 
-    function hookPlayer() {
-        if (!window.Lampa || !Lampa.Player) return;
 
-        const OriginalOpen = Lampa.Player.open;
+    function waitForSourcesAndClickGMTLOP() {
+        let attempts = 0;
 
-        if (!OriginalOpen || OriginalOpen.__gmtlop_hooked) return;
+        const timer = setInterval(() => {
+            attempts++;
 
-        function WrappedOpen(data) {
-            const result = OriginalOpen.apply(this, arguments);
+            // шукаємо всі елементи джерел
+            const items = document.querySelectorAll('.source-item, .selector__item, .player-source, [class*="source"], [class*="selector"]');
 
-            setTimeout(() => {
-                try {
-                    if (Lampa.Player && Lampa.Player.instance) {
-                        selectGMTLOP(Lampa.Player.instance);
+            if (items && items.length) {
+
+                console.log('[GMTLOP] sources found:', items.length);
+
+                for (let el of items) {
+                    const text = (el.innerText || '').trim().toLowerCase();
+
+                    if (text.includes('gmtlop')) {
+                        console.log('[GMTLOP] clicking:', el);
+
+                        el.click();
+                        clearInterval(timer);
+                        return;
                     }
-                } catch (e) {
-                    console.error(e);
                 }
-            }, 800);
+            }
 
-            return result;
-        }
+            // таймаут щоб не висіло
+            if (attempts > 20) {
+                console.log('[GMTLOP] not found');
+                clearInterval(timer);
+            }
 
-        WrappedOpen.__gmtlop_hooked = true;
-        Lampa.Player.open = WrappedOpen;
-
-        log('Player hook installed');
+        }, 300);
     }
-
-    function init() {
-        if (!window.Lampa) {
-            setTimeout(init, 1000);
-            return;
-        }
-
-        log('Initializing...');
-
-        hookPlayer();
-
-        // повторна перевірка (Lampa може дозавантажувати модулі)
-        setInterval(hookPlayer, 3000);
-    }
-
-    init();
 
 })();

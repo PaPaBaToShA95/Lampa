@@ -10,126 +10,121 @@
 
     console.log('[UA SAFE FEED] loaded');
 
-    // додаємо пункт меню
-    Lampa.Menu.add({
-        id: 'ua_safe_feed',
-        title: '🇺🇦 UA Feed',
-        icon: 'star'
-    });
+    // меню
+    if (Lampa.Menu && Lampa.Menu.add) {
+        Lampa.Menu.add({
+            id: 'ua_safe_feed',
+            title: '🇺🇦 UA Feed',
+            icon: 'star'
+        });
+    }
 
-    // відкриття екрану
-    Lampa.Activity.push({
-        open: function () {
+    function openFeed() {
 
-            const content = $('<div class="ua-feed"></div>');
+        const root = document.createElement('div');
+        root.className = 'ua-feed';
 
-            $('.content').html(content);
+        document.querySelector('.content').innerHTML = '';
+        document.querySelector('.content').appendChild(root);
 
-            loadContent(content);
-        },
-        title: 'UA Feed'
-    });
+        root.innerHTML = '<div style="color:white">Loading...</div>';
+
+        loadContent(root);
+    }
 
     function loadContent(root) {
 
-        root.html('<div class="ua-loading">Loading...</div>');
+        // fallback якщо TMDB недоступний
+        const url = 'https://api.themoviedb.org/3/movie/popular?api_key=undefined&language=en-US&page=1';
 
-        // беремо популярні фільми
-        Lampa.TMDB.api('/movie/popular').then(data => {
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
 
-            let items = data.results || [];
+                let items = data.results || [];
 
-            // 🔥 ФІЛЬТР: прибираємо RU контент
-            items = items.filter(i => {
+                // 🔥 фільтр RU
+                items = items.filter(i => {
 
-                const countries = (i.origin_country || i.production_countries || []);
+                    const text = JSON.stringify(i).toLowerCase();
 
-                const text = JSON.stringify(countries).toLowerCase();
+                    return !text.includes('russia') &&
+                           !text.includes('ru') &&
+                           !text.includes('россия');
+                });
 
-                return !text.includes('ru') && !text.includes('russia');
+                render(root, items);
+            })
+            .catch(err => {
+                root.innerHTML = '<div style="color:red">API error</div>';
+                console.log(err);
             });
-
-            render(root, items);
-
-        });
     }
 
     function render(root, items) {
 
-        let html = `<div class="ua-grid">`;
+        root.innerHTML = '';
+
+        const grid = document.createElement('div');
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
+        grid.style.gap = '12px';
 
         items.forEach(item => {
 
-            html += `
-                <div class="ua-card" data-id="${item.id}">
-                    <div class="ua-poster" style="background-image:url(https://image.tmdb.org/t/p/w300${item.poster_path})"></div>
-                    <div class="ua-title">${item.title || item.name}</div>
-                </div>
-            `;
+            const card = document.createElement('div');
+            card.style.cursor = 'pointer';
+            card.style.color = '#fff';
+
+            const img = document.createElement('div');
+            img.style.height = '220px';
+            img.style.backgroundSize = 'cover';
+            img.style.borderRadius = '10px';
+            img.style.backgroundImage =
+                `url(https://image.tmdb.org/t/p/w300${item.poster_path})`;
+
+            const title = document.createElement('div');
+            title.textContent = item.title || item.name;
+            title.style.fontSize = '14px';
+            title.style.marginTop = '6px';
+
+            card.appendChild(img);
+            card.appendChild(title);
+
+            card.onclick = function () {
+                if (Lampa.Activity && Lampa.Activity.push) {
+                    Lampa.Activity.push({
+                        url: '/movie/' + item.id,
+                        title: item.title
+                    });
+                }
+            };
+
+            grid.appendChild(card);
         });
 
-        html += `</div>`;
-
-        root.html(html);
-
-        bind(root);
+        root.appendChild(grid);
     }
 
-    function bind(root) {
+    // перехоплення відкриття меню
+    document.addEventListener('click', function (e) {
 
-        root.find('.ua-card').on('click', function () {
+        const el = e.target.closest('[data-id="ua_safe_feed"]');
 
-            const id = $(this).data('id');
+        if (el) {
+            openFeed();
+        }
 
-            Lampa.Activity.push({
-                url: '/movie/' + id,
-                title: 'Details'
-            });
-
-        });
-    }
+    }, true);
 
     // стилі
-    const css = `
+    const style = document.createElement('style');
+    style.innerHTML = `
         .ua-feed {
             padding: 20px;
         }
-
-        .ua-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 15px;
-        }
-
-        .ua-card {
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .ua-card:hover {
-            transform: scale(1.05);
-        }
-
-        .ua-poster {
-            width: 100%;
-            height: 220px;
-            background-size: cover;
-            border-radius: 12px;
-        }
-
-        .ua-title {
-            color: #fff;
-            margin-top: 8px;
-            font-size: 14px;
-        }
-
-        .ua-loading {
-            color: #fff;
-        }
     `;
 
-    const style = document.createElement('style');
-    style.innerHTML = css;
     document.head.appendChild(style);
 
 })();
